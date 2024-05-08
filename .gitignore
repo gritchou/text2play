@@ -1,1 +1,12 @@
-raw_data/
+.env
+
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+
+data/raw/famous_paintings
+data/raw/images
+data/processed
+
+notebooks/.ipynb_checkpoints/
