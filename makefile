@@ -1,6 +1,7 @@
-# Simple Makefile for managing the development of a Python-based project
+include .env
+export
 
-.PHONY: setup install test run clean docs
+.PHONY: setup install test run clean docs preprocess-dataset
 
 # Define default target, executed when no target is specified
 all: install
@@ -30,6 +31,7 @@ clean:
 	@echo "Cleaning up..."
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -delete
+	find $(PROCESSED_DATA_PATH) -type f -name '*.csv' -delete  # Assuming CSV files in the processed data path
 	rm -rf venv
 	@echo "Cleaned."
 
@@ -39,4 +41,13 @@ docs:
 	cd docs && $(MAKE) html
 	@echo "Documentation generated."
 
-# Add additional commands if needed
+# Preprocess the dataset
+preprocess-dataset:
+	@echo "Preprocessing dataset..."
+	python text2play/data/preprocessing.py $(RAW_DATA_PATH) $(DATASET_RAW_FILE_NAME) $(PROCESSED_DATA_PATH) $(DATASET_PROCESSED_FILE_NAME)
+
+# Clean dataset
+clean-dataset:
+	@echo "Cleaning dataset..."
+	find $(PROCESSED_DATA_PATH) -type f -name '*.csv' -delete  # Modify as needed for actual cleanup tasks
+	@echo "Dataset cleaned."
