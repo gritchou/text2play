@@ -1,6 +1,7 @@
-from .dataloader import load_dataset, preprocess_data
+from .preprocessing import process_paintings_dataset, clean_html, remove_na_rows
 
 __all__ = [
-    'load_dataset',
-    'preprocess_data'
+    'process_paintings_dataset',
+    'clean_html',
+    'remove_na_rows'
 ]
