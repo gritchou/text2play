@@ -12,10 +12,13 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'torch',
-        'torchvision',
+        'torch>=1.7',
+        'torchvision>=0.8.0',
         'Pillow',
         'matplotlib',
+        'numpy',
+        'pandas',
+        'sentence-transformers>=0.4.0'
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',
