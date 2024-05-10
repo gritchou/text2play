@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import sys
+import re
 
 def process_paintings_dataset(input_path, input_file_name, output_path, output_file_name):
     """
@@ -43,9 +44,11 @@ def clean_html(text):
       and ensure the text is readable and clean for further processing or analysis.
     """
     # Implement HTML cleaning logic here
-    pass
+    #1. Remove all HTML tags including other entities like:[i], [/i], [b], [/b], [u],[/u], [url], and [/url]
+    pattern_to_remove = r'<[^>]+>|\[/?i\]|\[/?b\]|\[/?u\]|\[url href=[^\]]*\][^\[]*\[/url\]'
+    cleaned_text = re.sub(pattern_to_remove, '', text)
 
-    return text
+    return cleaned_text
 
 def remove_na_rows(df):
     """
