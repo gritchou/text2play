@@ -35,13 +35,17 @@ async def get_image(prompt: TextPrompt) -> Dict[str, str]:
         print(stylized_image_path)
         style_img_path = style_image_url
 
-        final_image = style_transfer(content_img_path, style_img_path, stylized_image_path, device="cuda")
+        # Call style transfer without device argument
+        final_image = style_transfer(content_img_path, style_img_path, stylized_image_path, num_steps=300, content_weight=1e5, style_weight=1e10)
+
+        # Assuming you might store or serve the final image via URL, modify as needed
+        stylized_image_url = f"http://example.com/path_to_output/{os.path.basename(stylized_image_path)}"
 
         return {
             "prompt": prompt.prompt,
             "content_image_url": content_img_path,
             "style_image_url": style_image_url,
-            "stylized_image_url": style_img_path
+            "stylized_image_url": stylized_image_url
         }
 
     except Exception as e:
