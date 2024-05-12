@@ -20,9 +20,9 @@ def process_paintings_dataset(input_path, input_file_name, output_path, output_f
     # Load the dataset
     df = pd.read_csv(input_file)
 
-    # Clean text and remove rows
-    df['Description'] = df['Description'].apply(clean_html)
+    # Remove na rows then clean the description
     df = remove_na_rows(df)
+    df['Description'] = df['Description'].apply(clean_html)
 
     # Save the processed DataFrame
     df.to_csv(output_file, index=False)
@@ -43,10 +43,15 @@ def clean_html(text):
     - This function should remove all HTML tags, handle or decode HTML entities,
       and ensure the text is readable and clean for further processing or analysis.
     """
-    # Implement HTML cleaning logic here
-    #1. Remove all HTML tags including other entities like:[i], [/i], [b], [/b], [u],[/u], [url], and [/url]
+    if pd.isna(text) or not isinstance(text, str):
+        return ""  # Return an empty string or handle it as needed
+
+    # Define a pattern to remove HTML tags and other entities
     pattern_to_remove = r'<[^>]+>|\[/?i\]|\[/?b\]|\[/?u\]|\[url href=[^\]]*\][^\[]*\[/url\]'
     cleaned_text = re.sub(pattern_to_remove, '', text)
+
+    return cleaned_text
+
 
     return cleaned_text
 

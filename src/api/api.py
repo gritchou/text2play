@@ -50,3 +50,10 @@ async def get_image(prompt: TextPrompt) -> Dict[str, str]:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ping")
+async def ping():
+    """
+    Health check endpoint to confirm the API is up and running.
+    """
+    return {"status": "success", "message": "API is up and running!"}

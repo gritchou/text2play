@@ -112,7 +112,7 @@ venv.bak/
 
 # Project
 
-text2play/data/raw/images
-text2play/data/processed
+src/data/raw/images
+src/data/processed
 
 notebooks/.ipynb_checkpoints/

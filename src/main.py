@@ -1,11 +1,11 @@
 import argparse
 import torch
 
-from text2play.models.style_transfer_cnn import style_transfer
+from src.models.style_transfer_cnn import style_transfer
 
-default_content_image = 'text2play/data/raw/images/content/astronaut.png'
-default_style_image = 'text2play/data/raw/images/style/Van_Gogh_Starry_Night.jpg'
-default_output_image = 'text2play/data/raw/images/stylized/astronaut_stylized.jpg'
+default_content_image = 'src/data/raw/images/content/astronaut.png'
+default_style_image = 'src/data/raw/images/style/Van_Gogh_Starry_Night.jpg'
+default_output_image = 'src/data/raw/images/stylized/astronaut_stylized.jpg'
 
 def main():
     parser = argparse.ArgumentParser(description='Perform style transfer between two images.')

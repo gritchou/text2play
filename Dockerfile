@@ -23,11 +23,8 @@ COPY . /app
 # Install any needed packages specified in requirements.txt
 RUN python3.10 -m pip install --no-cache-dir -r requirements.txt
 
-# Make port 80 available to the world outside this container
-EXPOSE 80
-
 # Define environment variable to improve Python logging (optional)
 ENV PYTHONUNBUFFERED=1
 
-# Run the Uvicorn server
-CMD ["uvicorn", "text2play.api.api:app", "--host", "0.0.0.0", "--port", "80"]
+# Run the Uvicorn server, defaulting to PORT 8080 if not specified
+CMD ["sh", "-c", "uvicorn src.api.api:app --host 0.0.0.0 --port ${PORT:-8080}"]
