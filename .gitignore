@@ -110,8 +110,9 @@ venv.bak/
 
 .DS_Store
 
-data/raw/famous_paintings
-data/raw/images
-data/processed
+# Project
+
+src/data/raw/images
+src/data/processed
 
 notebooks/.ipynb_checkpoints/
