@@ -24,6 +24,9 @@ def process_paintings_dataset(input_path, input_file_name, output_path, output_f
     df = remove_na_rows(df)
     df['Description'] = df['Description'].apply(clean_html)
 
+    # Ensure the output directory exists
+    os.makedirs(output_path, exist_ok=True)
+
     # Save the processed DataFrame
     df.to_csv(output_file, index=False)
 
