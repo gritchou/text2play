@@ -116,3 +116,5 @@ src/data/raw/images
 src/data/processed
 
 notebooks/.ipynb_checkpoints/
+
+text2play
