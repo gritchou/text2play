@@ -19,12 +19,14 @@ build:
 # Install dependencies
 install:
 	@echo "Installing dependencies..."
+	./text2play/bin/pip install --upgrade pip
 	./text2play/bin/pip install -r requirements.txt
+
 
 # Run the application
 run:
 	@echo "Running the application..."
-	./text2play/bin/python main.py
+	$(PYTHON) main.py
 
 # Clean up the project: remove Python cache files, virtual environment, etc.
 clean:
