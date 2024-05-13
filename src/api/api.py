@@ -1,9 +1,14 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Dict
 
 import pandas as pd
+
 import os
+import base64
+
+from io import BytesIO
+from typing import Dict
 
 from ..models.prompt2image import prompt2imageURL
 from ..models.style_transfer_cnn import style_transfer
@@ -13,7 +18,6 @@ app = FastAPI()
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'paintings_dataset.csv')
 CONTENT_FILE = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'astronaut.png')
-STYLIZED_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'stylized_image.jpg')
 
 class TextPrompt(BaseModel):
     prompt: str
@@ -26,26 +30,23 @@ async def get_image(prompt: TextPrompt) -> Dict[str, str]:
     """
     try:
         df = pd.read_csv(DATA_FILE)
-        print(prompt.prompt)
         style_image_url = prompt2imageURL(prompt.prompt, df)
-        print(style_image_url)
         content_img_path = CONTENT_FILE
-        print(content_img_path)
-        stylized_image_path = STYLIZED_FILE
-        print(stylized_image_path)
         style_img_path = style_image_url
 
-        # Call style transfer without device argument
-        final_image = style_transfer(content_img_path, style_img_path, stylized_image_path, num_steps=300, content_weight=1e5, style_weight=1e10)
+        # Perform style transfer and get the final image object
+        final_image = style_transfer(content_img_path, style_img_path, num_steps=300, content_weight=1e5, style_weight=1e10)
 
-        # Assuming you might store or serve the final image via URL, modify as needed
-        stylized_image_url = f"http://example.com/path_to_output/{os.path.basename(stylized_image_path)}"
+        # Convert the image object to a Base64 string
+        buffered = BytesIO()
+        final_image.save(buffered, format="JPEG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
         return {
             "prompt": prompt.prompt,
             "content_image_url": content_img_path,
             "style_image_url": style_image_url,
-            "stylized_image_url": stylized_image_url
+            "stylized_image": img_str
         }
 
     except Exception as e:
