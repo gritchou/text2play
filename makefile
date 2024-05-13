@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: setup build install run clean preprocess-dataset docker-build docker-run docker-stop docker-push deploy-gcr undeploy-gcr delete-gar docker-clean start-api test-api test-api-local
+.PHONY: setup build install run clean preprocess-dataset docker-build docker-run docker-stop docker-push deploy-gcr undeploy-gcr delete-gar docker-clean start-api test-api test-api-local test-api-prompt
 
 # Define default target, executed when no target is specified
 all: install
@@ -109,3 +109,11 @@ test-api:
 test-api-local:
 	@echo "Testing local API..."
 	curl http://127.0.0.1:8080/ping
+
+# Test API with prompt and handle image response
+test-api-prompt:
+	@if [ "$(PROMPT)" = "" ]; then \
+		echo "Usage: make test-api-prompt PROMPT='<prompt-text>'"; \
+	else \
+		./tests/test_api.sh "$(PROMPT)"; \
+	fi

@@ -1,10 +1,7 @@
 import torch
-import requests
-from io import BytesIO
 from torchvision import transforms, models
-from PIL import Image
 from torch.optim import Adam
-from utils.image_utils import load_image
+from .utils.image_utils import load_image
 
 def get_features(image, model, layers=None):
     """ Extract features from the layers of the model. """
@@ -25,13 +22,13 @@ def gram_matrix(tensor):
     gram = torch.mm(tensor, tensor.t())
     return gram
 
-def style_transfer(content_img_path, style_img_path, output_path, num_steps=300, content_weight=1e5, style_weight=1e10):
-    """ Perform style transfer from style_img to content_img. """
-    # Check GPU availability and set the device
+def style_transfer(content_img_path, style_img_path, num_steps=300, content_weight=1e5, style_weight=1e10):
+    """ Perform style transfer from style_img to content_img, returning the result as a PIL Image. """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     content_img = load_image(content_img_path, device)
     style_img = load_image(style_img_path, device, scale=0.5)
+
     vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
     vgg.to(device).eval()
 
@@ -60,6 +57,6 @@ def style_transfer(content_img_path, style_img_path, output_path, num_steps=300,
         if i % 50 == 0:
             print(f'Step {i}, Total loss: {total_loss.item()}')
 
+    # Convert the processed tensor back to a PIL Image
     final_img = transforms.ToPILImage()(target.cpu().squeeze(0))
-    final_img.save(output_path)
     return final_img
