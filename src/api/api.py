@@ -6,10 +6,14 @@ import os
 import base64
 from io import BytesIO
 from typing import Dict
+from google.cloud import error_reporting
 from ..models.prompt2image import prompt2imageURL
 from ..models.style_transfer_cnn import style_transfer
 
 app = FastAPI()
+
+# Initialize Google Cloud Error Reporting
+client = error_reporting.Client()
 
 # Configure CORS
 app.add_middleware(
@@ -37,18 +41,23 @@ async def get_image(prompt: TextPrompt) -> Dict[str, str]:
     and applies style transfer to generate a stylized image.
     """
     try:
+        print("Received prompt:", prompt.prompt)
         df = pd.read_csv(DATA_FILE)
+        print("Data file loaded")
         style_image_url = prompt2imageURL(prompt.prompt, df)
+        print("Style image URL:", style_image_url)
         content_img_path = CONTENT_FILE
         style_img_path = style_image_url
 
         # Perform style transfer and get the final image object
         final_image = style_transfer(content_img_path, style_img_path, num_steps=300, content_weight=1e5, style_weight=1e10)
+        print("Style transfer completed")
 
         # Convert the image object to a Base64 string
         buffered = BytesIO()
         final_image.save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        print("Image converted to base64")
 
         return {
             "prompt": prompt.prompt,
@@ -58,6 +67,7 @@ async def get_image(prompt: TextPrompt) -> Dict[str, str]:
         }
 
     except Exception as e:
+        client.report_exception()  # Report the error to Google Cloud Error Reporting
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/ping")
