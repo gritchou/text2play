@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: text2play-api
+spec:
+  selector:
+    app: text2play-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer

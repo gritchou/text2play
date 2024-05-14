@@ -1,15 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
 import pandas as pd
-
 import os
 import base64
-
 from io import BytesIO
 from typing import Dict
-
 from ..models.prompt2image import prompt2imageURL
 from ..models.style_transfer_cnn import style_transfer
 
@@ -18,7 +14,10 @@ app = FastAPI()
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins. Change this to allow only specific origins in production.
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "https://text2play.netlify.app"  # Deployed frontend
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,7 +25,7 @@ app.add_middleware(
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'paintings_dataset.csv')
-CONTENT_FILE = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background.jpg')
+CONTENT_FILE = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background.png')
 
 class TextPrompt(BaseModel):
     prompt: str
