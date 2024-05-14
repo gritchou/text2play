@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import pandas as pd
@@ -15,9 +15,18 @@ from ..models.style_transfer_cnn import style_transfer
 
 app = FastAPI()
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins. Change this to allow only specific origins in production.
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'paintings_dataset.csv')
-CONTENT_FILE = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'astronaut.png')
+CONTENT_FILE = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background.jpg')
 
 class TextPrompt(BaseModel):
     prompt: str
