@@ -29,7 +29,7 @@ app.add_middleware(
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'paintings_dataset.csv')
-CONTENT_FILE = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background.png')
+CONTENT_FILE = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background.jpg')
 
 class TextPrompt(BaseModel):
     prompt: str
