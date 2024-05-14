@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: setup build install run clean preprocess-dataset docker-build docker-run docker-stop docker-push deploy-gcr undeploy-gcr delete-gar docker-clean start-api test-api test-api-local test-api-prompt
+.PHONY: setup build install run clean preprocess-dataset docker-build docker-run docker-stop docker-push deploy-gcr undeploy-gcr delete-gar docker-clean start-api test-api test-api-local test-api-prompt deploy-gke undeploy-gke create-gke-cluster create-gpu-node-pool
 
 # Define default target, executed when no target is specified
 all: install
@@ -21,7 +21,6 @@ install:
 	@echo "Installing dependencies..."
 	./text2play/bin/pip install --upgrade pip
 	./text2play/bin/pip install -r requirements.txt
-
 
 # Run the application
 run:
@@ -56,7 +55,7 @@ docker-build: preprocess-dataset
 # Run the Docker image locally
 docker-run:
 	@echo "Running Docker container..."
-	docker run --name $(CONTAINER_NAME) -e PORT=8080 -e CORS_ORIGINS=http://localhost:3000 -p 8080:8080 $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(GCP_REPOSITORY_NAME)/text2play-api:$(DOCKER_IMAGE_TAG)
+	docker run --name $(CONTAINER_NAME) -e PORT=8080 -p 8080:8080 $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(GCP_REPOSITORY_NAME)/text2play-api:$(DOCKER_IMAGE_TAG)
 
 # Docker stop command
 docker-stop:
@@ -79,8 +78,7 @@ delete-gar:
 deploy-gcr:
 	@echo "Deploying to Google Cloud Run..."
 	gcloud run deploy text2play-api --image $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(GCP_REPOSITORY_NAME)/text2play-api:$(DOCKER_IMAGE_TAG) \
-	--platform managed --region $(GCP_REGION) --allow-unauthenticated --memory $(GCR_MEMORY) \
-	--set-env-vars CORS_ORIGINS=https://text2play.netlify.app
+	--platform managed --region $(GCP_REGION) --allow-unauthenticated --memory $(GCR_MEMORY)
 
 # Undeploy from Google Cloud Run
 undeploy-gcr:
@@ -99,7 +97,7 @@ docker-clean:
 # Start the API locally using Uvicorn
 start-api:
 	@echo "Starting the API server locally..."
-	CORS_ORIGINS=http://localhost:3000 ./text2play/bin/uvicorn src.api.api:app --reload --port 8080
+	./text2play/bin/uvicorn src.api.api:app --reload --port 8080
 
 # Test the deployed API
 test-api:
@@ -118,3 +116,28 @@ test-api-prompt:
 	else \
 		./tests/test_api.sh "$(PROMPT)"; \
 	fi
+
+# Deploy to GKE
+deploy-gke:
+	kubectl apply -f k8s/deployment.yaml
+	kubectl apply -f k8s/service.yaml
+
+# Undeploy from GKE
+undeploy-gke:
+	kubectl delete -f k8s/service.yaml
+	kubectl delete -f k8s/deployment.yaml
+
+# Create GKE cluster
+create-gke-cluster:
+	@echo "Creating GKE cluster..."
+	gcloud container clusters create $(GKE_CLUSTER_NAME) --zone $(GKE_ZONE) --machine-type n1-standard-2
+
+# Create GPU Node Pool
+create-gpu-node-pool:
+	@echo "Creating GPU node pool..."
+	gcloud container node-pools create gpu-pool --cluster $(GKE_CLUSTER_NAME) --zone $(GKE_ZONE) --accelerator type=nvidia-tesla-k80,count=1 --num-nodes 1 --min-nodes 0 --max-nodes 3 --machine-type n1-standard-2 --enable-autoscaling
+
+# Get GKE Cluster Credentials
+get-gke-credentials:
+	@echo "Fetching GKE cluster credentials..."
+	gcloud container clusters get-credentials $(GKE_CLUSTER_NAME) --zone $(GKE_ZONE)

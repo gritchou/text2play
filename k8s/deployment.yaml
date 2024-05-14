@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: text2play-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: text2play-api
+  template:
+    metadata:
+      labels:
+        app: text2play-api
+    spec:
+      containers:
+      - name: text2play-api
+        image: gcr.io/wagon-bootcamp-417214/text2play-api:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            nvidia.com/gpu: 1
