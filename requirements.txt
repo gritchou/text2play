@@ -10,3 +10,4 @@ torch==2.3.0
 torchvision==0.18.0
 uvicorn
 matplotlib
+google-cloud-error-reporting
