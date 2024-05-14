@@ -56,7 +56,7 @@ docker-build: preprocess-dataset
 # Run the Docker image locally
 docker-run:
 	@echo "Running Docker container..."
-	docker run --name $(CONTAINER_NAME) -e PORT=8080 -p 8080:8080 $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(GCP_REPOSITORY_NAME)/text2play-api:$(DOCKER_IMAGE_TAG)
+	docker run --name $(CONTAINER_NAME) -e PORT=8080 -e CORS_ORIGINS=http://localhost:3000 -p 8080:8080 $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(GCP_REPOSITORY_NAME)/text2play-api:$(DOCKER_IMAGE_TAG)
 
 # Docker stop command
 docker-stop:
@@ -79,7 +79,8 @@ delete-gar:
 deploy-gcr:
 	@echo "Deploying to Google Cloud Run..."
 	gcloud run deploy text2play-api --image $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(GCP_REPOSITORY_NAME)/text2play-api:$(DOCKER_IMAGE_TAG) \
-	--platform managed --region $(GCP_REGION) --allow-unauthenticated --memory $(GCR_MEMORY)
+	--platform managed --region $(GCP_REGION) --allow-unauthenticated --memory $(GCR_MEMORY) \
+	--set-env-vars CORS_ORIGINS=https://text2play.netlify.app
 
 # Undeploy from Google Cloud Run
 undeploy-gcr:
@@ -98,7 +99,7 @@ docker-clean:
 # Start the API locally using Uvicorn
 start-api:
 	@echo "Starting the API server locally..."
-	./text2play/bin/uvicorn src.api.api:app --reload --port 8080
+	CORS_ORIGINS=http://localhost:3000 ./text2play/bin/uvicorn src.api.api:app --reload --port 8080
 
 # Test the deployed API
 test-api:

@@ -16,9 +16,11 @@ from ..models.style_transfer_cnn import style_transfer
 app = FastAPI()
 
 # Configure CORS
+origins = os.getenv("CORS_ORIGINS", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins. Change this to allow only specific origins in production.
+    allow_origins=origins,  # Allow all origins. Change this to allow only specific origins in production.
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
