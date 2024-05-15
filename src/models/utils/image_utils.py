@@ -4,7 +4,7 @@ from PIL import Image
 from torchvision import transforms
 import torch
 
-def load_image(img_path, device, size=512, scale=None):
+def load_image(img_path, device, size=None, scale=None):
     """ Load an image and prepare it for processing. """
     # Check if img_path is a URL
     if img_path.startswith('http://') or img_path.startswith('https://'):
@@ -17,7 +17,7 @@ def load_image(img_path, device, size=512, scale=None):
         size = int(scale * min(image.size))
 
     loader = transforms.Compose([
-        transforms.Resize((size, size)),
+        transforms.Resize((size, size)) if size else transforms.Resize(image.size),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
