@@ -3,6 +3,9 @@ import numpy as np
 import torch
 from torchvision import transforms
 import os
+import requests
+from io import BytesIO
+from PIL import Image
 import matplotlib.pyplot as plt
 
 from models.utils.vgg_definition import Vgg19
@@ -11,9 +14,13 @@ IMAGENET_MEAN_255 = [123.675, 116.28, 103.53]
 IMAGENET_STD_NEUTRAL = [1, 1, 1]
 
 def load_image(img_path, target_shape=None):
-    if not os.path.exists(img_path):
-        raise Exception(f'Path does not exist: {img_path}')
-    img = cv.imread(img_path)[:, :, ::-1]  # [:, :, ::-1] converts BGR (opencv format...) into RGB
+    if img_path.startswith('http://') or img_path.startswith('https://'):
+        response = requests.get(img_path)
+        img = np.array(Image.open(BytesIO(response.content)).convert('RGB'))
+    else:
+        if not os.path.exists(img_path):
+            raise Exception(f'Path does not exist: {img_path}')
+        img = cv.imread(img_path)[:, :, ::-1]  # [:, :, ::-1] converts BGR (opencv format...) into RGB
 
     if target_shape is not None:  # resize section
         if isinstance(target_shape, int) and target_shape != -1:  # scalar -> implicitly setting the height

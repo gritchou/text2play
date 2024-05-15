@@ -10,6 +10,8 @@ from google.cloud import error_reporting
 from models.prompt2image import prompt2imageURL
 from models.style_transfer_cnn import neural_style_transfer
 from models.utils.image_utils import save_image, load_image
+import requests
+from PIL import Image
 
 app = FastAPI()
 
@@ -36,6 +38,13 @@ CONTENT_FILES = {
     'small': os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background_small.jpg'),
     'medium': os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background_medium.jpg'),
     'large': os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background_large.jpg')
+}
+
+# Heights corresponding to different resolutions
+HEIGHTS = {
+    'small': 480,
+    'medium': 720,
+    'large': 1080
 }
 
 class StyleTransferRequest(BaseModel):
@@ -69,20 +78,37 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
         print(f"Content image path: {content_img_path}")
         print(f"Style image path: {style_image_url}")
 
+        # Determine the height based on the resolution
+        height = HEIGHTS.get(request.resolution)
+        if not height:
+            raise HTTPException(status_code=400, detail="Invalid resolution specified")
+
+        # Download style image if it's a URL
+        if style_image_url.startswith('http://') or style_image_url.startswith('https://'):
+            response = requests.get(style_image_url)
+            style_image_path = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'style', 'temp_style.jpg')
+            with open(style_image_path, 'wb') as f:
+                f.write(response.content)
+        else:
+            style_image_path = style_image_url
+
         # Prepare parameters for the neural_style_transfer function
         style_transfer_params = {
             "content_img_name": os.path.basename(content_img_path),
-            "style_img_name": os.path.basename(style_image_url),
+            "style_img_name": os.path.basename(style_image_path),
             "content_images_dir": os.path.dirname(content_img_path),
-            "style_images_dir": os.path.dirname(style_image_url),
+            "style_images_dir": os.path.dirname(style_image_path),
             "output_img_dir": os.path.join(BASE_DIR, 'data', 'processed'),
-            "height": 400,
+            "height": height,
             "content_weight": request.content_weight if request.content_weight is not None else 1e5,
             "style_weight": request.style_weight if request.style_weight is not None else 200000,
             "tv_weight": 1e0,
-            "optimizer": request.optimizer_type if request.optimizer_type is not None else 'lbfgs',
+            "optimizer": request.optimizer_type if request.optimizer_type is not None else 'adam',
             "init_method": 'content',
-            "saving_freq": -1
+            "saving_freq": -1,
+            "model": 'vgg19',
+            "img_format": (4, '.jpg'),
+            "num_of_iterations": 800 # Initial Recommendation "lbfgs" 1000, "adam": 3000
         }
 
         # Perform style transfer and get the final image object
@@ -91,7 +117,7 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
 
         # Read the generated image from the output path
         output_image_path = os.path.join(results_path, 'final.jpg')
-        final_image = load_image(output_image_path)
+        final_image = Image.open(output_image_path)
 
         # Convert the image object to a Base64 string
         buffered = BytesIO()
