@@ -1,6 +1,6 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
-from ..models.utils.text_preparation import clean_text
+from models.utils.text_preparation import clean_text
 
 def prompt2imageURL(promptText, dataset, descriptionColumnName='Description', imageUrlColumnName='Image URL', model_name="all-MiniLM-L6-v2"):
     """

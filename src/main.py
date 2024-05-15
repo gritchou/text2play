@@ -1,7 +1,7 @@
 import argparse
 import torch
 
-from src.models.style_transfer_cnn import style_transfer
+from models.style_transfer_cnn import style_transfer
 
 default_content_image = 'src/data/raw/images/content/astronaut.png'
 default_style_image = 'src/data/raw/images/style/Van_Gogh_Starry_Night.jpg'

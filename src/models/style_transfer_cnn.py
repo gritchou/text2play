@@ -1,9 +1,8 @@
-# src/models/style_transfer.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision import models, transforms
-from src.models.utils.image_utils import load_image
+from models.utils.image_utils import load_image
 from PIL import Image
 
 class ContentLoss(nn.Module):
@@ -42,11 +41,8 @@ class Normalization(nn.Module):
     def forward(self, img):
         return (img - self.mean) / self.std
 
-def get_style_model_and_losses(cnn, normalization_mean, normalization_std, style_img, content_img):
+def get_style_model_and_losses(cnn, normalization_mean, normalization_std, style_img, content_img, content_layers, style_layers):
     normalization = Normalization(normalization_mean, normalization_std).to(style_img.device)
-
-    content_layers = ['conv_4']
-    style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
 
     model = nn.Sequential(normalization)
     content_losses = []
@@ -89,7 +85,9 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std, style
 
     return model, style_losses, content_losses
 
-def style_transfer(content_img_path, style_img_path, num_steps=300, content_weight=1e5, style_weight=1e10):
+def style_transfer(content_img_path, style_img_path, num_steps=200, content_weight=1, style_weight=200000,
+                   content_layers=['conv_4'], style_layers=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5'],
+                   optimizer_type='Adam', learning_rate=0.003, output_path=None):
     """ Perform style transfer from style_img to content_img, returning the result as a PIL Image. """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -110,11 +108,20 @@ def style_transfer(content_img_path, style_img_path, num_steps=300, content_weig
     cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
     cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
 
-    model, style_losses, content_losses = get_style_model_and_losses(cnn, cnn_normalization_mean, cnn_normalization_std, style_img, content_img)
+    model, style_losses, content_losses = get_style_model_and_losses(
+        cnn, cnn_normalization_mean, cnn_normalization_std, style_img, content_img, content_layers, style_layers
+    )
 
     # Initialize the target image with the content image dimensions
     input_img = content_img.clone().requires_grad_(True)
-    optimizer = optim.LBFGS([input_img.requires_grad_()], lr=0.01)
+
+    # Select optimizer
+    if optimizer_type == 'LBFGS':
+        optimizer = optim.LBFGS([input_img.requires_grad_()], lr=learning_rate)
+    elif optimizer_type == 'Adam':
+        optimizer = optim.Adam([input_img.requires_grad_()], lr=learning_rate)
+    else:
+        raise ValueError("Unsupported optimizer type. Use 'LBFGS' or 'Adam'.")
 
     run = [0]
     while run[0] <= num_steps:
@@ -154,7 +161,8 @@ def style_transfer(content_img_path, style_img_path, num_steps=300, content_weig
     image = image.squeeze(0)
     image = unloader(image)
 
-    # Save the image
-    image.save("src/data/processed/stylized_image.jpeg")
+    # Save the image if an output path is provided
+    if output_path:
+        image.save(output_path)
 
     return image
