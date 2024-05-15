@@ -6,7 +6,7 @@ import os
 import requests
 from io import BytesIO
 from PIL import Image
-import matplotlib.pyplot as plt
+import base64
 
 from models.utils.vgg_definition import Vgg19
 
@@ -53,7 +53,7 @@ def prepare_img(img_path, target_shape, device):
 def save_image(img, img_path):
     if len(img.shape) == 2:
         img = np.stack((img,) * 3, axis=-1)
-    cv.imwrite(img_path, img[:, :, ::-1])  # [:, :, ::-1] converts rgb into bgr (opencv contraint...)
+    cv.imwrite(img_path, img[:, :, ::-1])  # [:, :, ::-1] converts rgb into bgr (opencv constraint...)
 
 def generate_out_img_name(config):
     prefix = os.path.basename(config['content_img_name']).split('.')[0] + '_' + os.path.basename(config['style_img_name']).split('.')[0]
@@ -64,13 +64,13 @@ def generate_out_img_name(config):
         suffix = f'_o_{config["optimizer"]}_i_{config["init_method"]}_h_{str(config["height"])}_m_{config["model"]}_cw_{config["content_weight"]}_sw_{config["style_weight"]}_tv_{config["tv_weight"]}{config["img_format"][1]}'
     return prefix + suffix
 
-def save_and_maybe_display(optimizing_img, dump_path, config, img_id, num_of_iterations, should_display=False):
+def save_optimized_image(optimizing_img, dump_path, config, img_id, num_of_iterations):
     saving_freq = config['saving_freq']
     out_img = optimizing_img.squeeze(axis=0).to('cpu').detach().numpy()
-    out_img = np.moveaxis(out_img, 0, 2)  # swap channel from 1st to 3rd position: ch, _, _ -> _, _, chr
+    out_img = np.moveaxis(out_img, 0, 2)  # swap channel from 1st to 3rd position: ch, _, _ -> _, _, ch
 
     # for saving_freq == -1 save only the final result (otherwise save with frequency saving_freq and save the last pic)
-    if img_id == num_of_iterations-1 or (saving_freq > 0 and img_id % saving_freq == 0):
+    if img_id == num_of_iterations - 1 or (saving_freq > 0 and img_id % saving_freq == 0):
         img_format = config['img_format']
         out_img_name = str(img_id).zfill(img_format[0]) + img_format[1] if saving_freq != -1 else generate_out_img_name(config)
         dump_img = np.copy(out_img)
@@ -78,18 +78,14 @@ def save_and_maybe_display(optimizing_img, dump_path, config, img_id, num_of_ite
         dump_img = np.clip(dump_img, 0, 255).astype('uint8')
         cv.imwrite(os.path.join(dump_path, out_img_name), dump_img[:, :, ::-1])
 
-    if should_display:
-        plt.imshow(np.uint8(get_uint8_range(out_img)))
-        plt.show()
-
-def get_uint8_range(x):
-    if isinstance(x, np.ndarray):
-        x -= np.min(x)
-        x /= np.max(x)
-        x *= 255
-        return x
-    else:
-        raise ValueError(f'Expected numpy array got {type(x)}')
+        if img_id == num_of_iterations - 1:
+            # Convert to PIL Image and encode to base64
+            final_img_pil = Image.fromarray(dump_img[:, :, ::-1])
+            buffered = BytesIO()
+            final_img_pil.save(buffered, format="JPEG")
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            return img_str
+    return None
 
 # initially it takes some time for PyTorch to download the models into local cache
 def prepare_model(device):

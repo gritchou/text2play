@@ -1,5 +1,4 @@
 import models.utils.image_utils as utils
-
 import torch
 from torch.optim import Adam, LBFGS
 from torch.autograd import Variable
@@ -56,18 +55,14 @@ def neural_style_transfer(config):
     style_img = utils.prepare_img(style_img_path, config['height'], device)
 
     if config['init_method'] == 'random':
-        # white_noise_img = np.random.uniform(-90., 90., content_img.shape).astype(np.float32)
         gaussian_noise_img = np.random.normal(loc=0, scale=90., size=content_img.shape).astype(np.float32)
         init_img = torch.from_numpy(gaussian_noise_img).float().to(device)
     elif config['init_method'] == 'content':
         init_img = content_img
     else:
-        # init image has same dimension as content image - this is a hard constraint
-        # feature maps need to be of same size for content image and init image
         style_img_resized = utils.prepare_img(style_img_path, np.asarray(content_img.shape[2:]), device)
         init_img = style_img_resized
 
-    # we are tuning optimizing_img's pixels! (that's why requires_grad=True)
     optimizing_img = Variable(init_img, requires_grad=True)
 
     neural_net, content_feature_maps_index_name, style_feature_maps_indices_names = utils.prepare_model(device)
@@ -79,9 +74,7 @@ def neural_style_transfer(config):
     target_style_representation = [utils.gram_matrix(x) for cnt, x in enumerate(style_img_set_of_feature_maps) if cnt in style_feature_maps_indices_names[0]]
     target_representations = [target_content_representation, target_style_representation]
 
-    #
-    # Start of optimization procedure
-    #
+    final_img_base64 = None
     if config['optimizer'] == 'adam':
         optimizer = Adam((optimizing_img,), lr=1e1)
         tuning_step = make_tuning_step(neural_net, optimizer, target_representations, content_feature_maps_index_name[0], style_feature_maps_indices_names[0], config)
@@ -89,14 +82,15 @@ def neural_style_transfer(config):
             total_loss, content_loss, style_loss, tv_loss = tuning_step(optimizing_img)
             with torch.no_grad():
                 print(f'Adam | iteration: {cnt:03}, total loss={total_loss.item():12.4f}, content_loss={config["content_weight"] * content_loss.item():12.4f}, style loss={config["style_weight"] * style_loss.item():12.4f}, tv loss={config["tv_weight"] * tv_loss.item():12.4f}')
-                utils.save_and_maybe_display(optimizing_img, dump_path, config, cnt, config['num_of_iterations'], should_display=False)
+                img_str = utils.save_optimized_image(optimizing_img, dump_path, config, cnt, config['num_of_iterations'])
+                if img_str:
+                    final_img_base64 = img_str
     elif config['optimizer'] == 'lbfgs':
-        # line_search_fn does not seem to have significant impact on result
         optimizer = LBFGS((optimizing_img,), max_iter=config['num_of_iterations'], line_search_fn='strong_wolfe')
         cnt = 0
 
         def closure():
-            nonlocal cnt
+            nonlocal cnt, final_img_base64
             if torch.is_grad_enabled():
                 optimizer.zero_grad()
             total_loss, content_loss, style_loss, tv_loss = build_loss(neural_net, optimizing_img, target_representations, content_feature_maps_index_name[0], style_feature_maps_indices_names[0], config)
@@ -104,62 +98,12 @@ def neural_style_transfer(config):
                 total_loss.backward()
             with torch.no_grad():
                 print(f'L-BFGS | iteration: {cnt:03}, total loss={total_loss.item():12.4f}, content_loss={config["content_weight"] * content_loss.item():12.4f}, style loss={config["style_weight"] * style_loss.item():12.4f}, tv loss={config["tv_weight"] * tv_loss.item():12.4f}')
-                utils.save_and_maybe_display(optimizing_img, dump_path, config, cnt, config['num_of_iterations'], should_display=False)
-
+                img_str = utils.save_optimized_image(optimizing_img, dump_path, config, cnt, config['num_of_iterations'])
+                if img_str:
+                    final_img_base64 = img_str
             cnt += 1
             return total_loss
 
         optimizer.step(closure)
 
-    return dump_path
-
-if __name__ == "__main__":
-    #
-    # fixed args - don't change these unless you have a good reason
-    #
-    default_resource_dir = os.path.join(os.path.dirname(__file__), 'data')
-    content_images_dir = os.path.join(default_resource_dir, 'content-images')
-    style_images_dir = os.path.join(default_resource_dir, 'style-images')
-    output_img_dir = os.path.join(default_resource_dir, 'output-images')
-    img_format = (4, '.jpg')  # saves images in the format: %04d.jpg
-
-    #
-    # modifiable args - feel free to play with these (only small subset is exposed by design to avoid cluttering)
-    # sorted so that the ones on the top are more likely to be changed than the ones on the bottom
-    #
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--content_img_name", type=str, help="content image name", default='figures.jpg')
-    parser.add_argument("--style_img_name", type=str, help="style image name", default='vg_starry_night.jpg')
-    parser.add_argument("--height", type=int, help="height of content and style images", default=400)
-
-    parser.add_argument("--content_weight", type=float, help="weight factor for content loss", default=1e5)
-    parser.add_argument("--style_weight", type=float, help="weight factor for style loss", default=3e4)
-    parser.add_argument("--tv_weight", type=float, help="weight factor for total variation loss", default=1e0)
-
-    parser.add_argument("--optimizer", type=str, choices=['lbfgs', 'adam'], default='lbfgs')
-    parser.add_argument("--init_method", type=str, choices=['random', 'content', 'style'], default='content')
-    parser.add_argument("--saving_freq", type=int, help="saving frequency for intermediate images (-1 means only final)", default=-1)
-    args = parser.parse_args()
-
-    # some values of weights that worked for figures.jpg, vg_starry_night.jpg (starting point for finding good images)
-    # once you understand what each one does it gets really easy -> also see README.md
-
-    # lbfgs, content init -> (cw, sw, tv) = (1e5, 3e4, 1e0)
-    # lbfgs, style   init -> (cw, sw, tv) = (1e5, 1e1, 1e-1)
-    # lbfgs, random  init -> (cw, sw, tv) = (1e5, 1e3, 1e0)
-
-    # adam, content init -> (cw, sw, tv, lr) = (1e5, 1e5, 1e-1, 1e1)
-    # adam, style   init -> (cw, sw, tv, lr) = (1e5, 1e2, 1e-1, 1e1)
-    # adam, random  init -> (cw, sw, tv, lr) = (1e5, 1e2, 1e-1, 1e1)
-
-    # just wrapping settings into a dictionary
-    optimization_config = dict()
-    for arg in vars(args):
-        optimization_config[arg] = getattr(args, arg)
-    optimization_config['content_images_dir'] = content_images_dir
-    optimization_config['style_images_dir'] = style_images_dir
-    optimization_config['output_img_dir'] = output_img_dir
-    optimization_config['img_format'] = img_format
-
-    # original NST (Neural Style Transfer) algorithm (Gatys et al.)
-    results_path = neural_style_transfer(optimization_config)
+    return final_img_base64
