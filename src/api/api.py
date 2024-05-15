@@ -5,7 +5,7 @@ import pandas as pd
 import os
 import base64
 from io import BytesIO
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from google.cloud import error_reporting
 from models.prompt2image import prompt2imageURL
 from models.style_transfer_cnn import style_transfer
@@ -43,6 +43,10 @@ class StyleTransferRequest(BaseModel):
     content_weight: Optional[float] = None
     style_weight: Optional[float] = None
     num_steps: Optional[int] = None
+    content_layers: Optional[List[str]] = None
+    style_layers: Optional[List[str]] = None
+    optimizer_type: Optional[str] = None
+    learning_rate: Optional[float] = None
 
 @app.post("/getImage/")
 async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
@@ -64,18 +68,25 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
         print(f"Content image path: {content_img_path}")
         print(f"Style image path: {style_image_url}")
 
-        # Default values if not provided
-        content_weight = request.content_weight if request.content_weight is not None else 1
-        style_weight = request.style_weight if request.style_weight is not None else 200000
-        num_steps = request.num_steps if request.num_steps is not None else 200
+        # Prepare parameters for the style_transfer function
+        style_transfer_params = {
+            "num_steps": request.num_steps,
+            "content_weight": request.content_weight,
+            "style_weight": request.style_weight,
+            "content_layers": request.content_layers,
+            "style_layers": request.style_layers,
+            "optimizer_type": request.optimizer_type,
+            "learning_rate": request.learning_rate,
+        }
+
+        # Filter out None values to avoid overriding defaults in the style_transfer function
+        style_transfer_params = {k: v for k, v in style_transfer_params.items() if v is not None}
 
         # Perform style transfer and get the final image object
         final_image = style_transfer(
             content_img_path,
             style_image_url,
-            num_steps=num_steps,
-            content_weight=content_weight,
-            style_weight=style_weight
+            **style_transfer_params
         )
         print("Style transfer completed")
 
