@@ -9,8 +9,14 @@ fi
 # API Endpoint URL
 URL="http://127.0.0.1:8080/getImage/"
 
-# Payload
-DATA="{\"prompt\": \"$1\"}"
+# Payload with additional parameters
+DATA=$(jq -n --arg prompt "$1" --arg resolution "medium" --argjson content_weight "null" --argjson style_weight "null" --argjson num_steps "null" '{
+    prompt: $prompt,
+    resolution: $resolution,
+    content_weight: $content_weight,
+    style_weight: $style_weight,
+    num_steps: $num_steps
+}')
 
 # Send the POST request and save the response
 RESPONSE=$(curl -s -X POST "$URL" -H "Content-Type: application/json" -d "$DATA")
