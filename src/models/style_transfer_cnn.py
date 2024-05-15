@@ -93,12 +93,18 @@ def style_transfer(content_img_path, style_img_path, num_steps=300, content_weig
     """ Perform style transfer from style_img to content_img, returning the result as a PIL Image. """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    content_img = load_image(content_img_path, device, size=512)
-    style_img = load_image(style_img_path, device, size=512)
+    # Load the content image and get its dimensions
+    content_img = load_image(content_img_path, device)
+    _, _, content_height, content_width = content_img.size()
 
-    # Verify the dimensions of content and style images
-    print(f"Content image size: {content_img.size()}")
-    print(f"Style image size: {style_img.size()}")
+    # Print the dimensions for debugging
+    print(f"Content Image - Width: {content_width}, Height: {content_height}")
+
+    # Load the style image and resize it to match the content image dimensions
+    style_img = load_image(style_img_path, device, size=(content_height, content_width))
+
+    # Print the dimensions for debugging
+    print(f"Style Image - Width: {style_img.size(3)}, Height: {style_img.size(2)}")
 
     cnn = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features.to(device).eval()
     cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
@@ -106,6 +112,7 @@ def style_transfer(content_img_path, style_img_path, num_steps=300, content_weig
 
     model, style_losses, content_losses = get_style_model_and_losses(cnn, cnn_normalization_mean, cnn_normalization_std, style_img, content_img)
 
+    # Initialize the target image with the content image dimensions
     input_img = content_img.clone().requires_grad_(True)
     optimizer = optim.LBFGS([input_img.requires_grad_()], lr=0.01)
 
