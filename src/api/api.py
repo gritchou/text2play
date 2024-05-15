@@ -8,7 +8,8 @@ from io import BytesIO
 from typing import Dict, Optional, List
 from google.cloud import error_reporting
 from models.prompt2image import prompt2imageURL
-from models.style_transfer_cnn import style_transfer
+from models.style_transfer_cnn import neural_style_transfer
+from models.utils.image_utils import save_image, load_image
 
 app = FastAPI()
 
@@ -68,27 +69,29 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
         print(f"Content image path: {content_img_path}")
         print(f"Style image path: {style_image_url}")
 
-        # Prepare parameters for the style_transfer function
+        # Prepare parameters for the neural_style_transfer function
         style_transfer_params = {
-            "num_steps": request.num_steps,
-            "content_weight": request.content_weight,
-            "style_weight": request.style_weight,
-            "content_layers": request.content_layers,
-            "style_layers": request.style_layers,
-            "optimizer_type": request.optimizer_type,
-            "learning_rate": request.learning_rate,
+            "content_img_name": os.path.basename(content_img_path),
+            "style_img_name": os.path.basename(style_image_url),
+            "content_images_dir": os.path.dirname(content_img_path),
+            "style_images_dir": os.path.dirname(style_image_url),
+            "output_img_dir": os.path.join(BASE_DIR, 'data', 'processed'),
+            "height": 400,
+            "content_weight": request.content_weight if request.content_weight is not None else 1e5,
+            "style_weight": request.style_weight if request.style_weight is not None else 200000,
+            "tv_weight": 1e0,
+            "optimizer": request.optimizer_type if request.optimizer_type is not None else 'lbfgs',
+            "init_method": 'content',
+            "saving_freq": -1
         }
 
-        # Filter out None values to avoid overriding defaults in the style_transfer function
-        style_transfer_params = {k: v for k, v in style_transfer_params.items() if v is not None}
-
         # Perform style transfer and get the final image object
-        final_image = style_transfer(
-            content_img_path,
-            style_image_url,
-            **style_transfer_params
-        )
+        results_path = neural_style_transfer(style_transfer_params)
         print("Style transfer completed")
+
+        # Read the generated image from the output path
+        output_image_path = os.path.join(results_path, 'final.jpg')
+        final_image = load_image(output_image_path)
 
         # Convert the image object to a Base64 string
         buffered = BytesIO()
