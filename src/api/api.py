@@ -4,11 +4,13 @@ from pydantic import BaseModel
 import pandas as pd
 import os
 import base64
-from io import BytesIO
 from typing import Dict, Optional, List
 from google.cloud import error_reporting
 from models.prompt2image import prompt2imageURL
-from models.style_transfer_cnn import style_transfer
+from models.style_transfer_cnn import neural_style_transfer
+import requests
+import numpy as np
+import cv2 as cv
 
 app = FastAPI()
 
@@ -30,11 +32,16 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE = os.path.join(BASE_DIR, 'data', 'processed', 'paintings_dataset.csv')
 
-# Paths to different resolutions of the content image
 CONTENT_FILES = {
     'small': os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background_small.jpg'),
     'medium': os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background_medium.jpg'),
     'large': os.path.join(BASE_DIR, 'data', 'raw', 'images', 'content', 'background_large.jpg')
+}
+
+HEIGHTS = {
+    'small': 480,
+    'medium': 720,
+    'large': 1080
 }
 
 class StyleTransferRequest(BaseModel):
@@ -68,33 +75,46 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
         print(f"Content image path: {content_img_path}")
         print(f"Style image path: {style_image_url}")
 
-        # Prepare parameters for the style_transfer function
+        height = HEIGHTS.get(request.resolution)
+        if not height:
+            raise HTTPException(status_code=400, detail="Invalid resolution specified")
+
+        if style_image_url.startswith('http://') or style_image_url.startswith('https://'):
+            response = requests.get(style_image_url)
+            img_array = np.frombuffer(response.content, np.uint8)
+            style_img = cv.imdecode(img_array, cv.IMREAD_COLOR)
+        else:
+            style_img = cv.imread(style_image_url)
+
+        # Ensure the output directory exists
+        output_img_dir = os.path.join(BASE_DIR, 'data', 'processed')
+        os.makedirs(output_img_dir, exist_ok=True)
+
+        # Prepare parameters for the neural_style_transfer function
         style_transfer_params = {
-            "num_steps": request.num_steps,
-            "content_weight": request.content_weight,
-            "style_weight": request.style_weight,
-            "content_layers": request.content_layers,
-            "style_layers": request.style_layers,
-            "optimizer_type": request.optimizer_type,
-            "learning_rate": request.learning_rate,
+            "content_img_name": os.path.basename(content_img_path),
+            "style_img": style_img,  # Pass the style image directly
+            "content_images_dir": os.path.dirname(content_img_path),
+            "height": height,
+            "content_weight": request.content_weight if request.content_weight is not None else 1e5,
+            "style_weight": request.style_weight if request.style_weight is not None else 200000,
+            "tv_weight": 1e0,
+            "optimizer": request.optimizer_type if request.optimizer_type is not None else 'adam',
+            "init_method": 'content',
+            "saving_freq": -1,
+            "model": 'vgg19',
+            "img_format": (4, '.jpg'),
+            "num_of_iterations": 800,
+            "output_img_dir": output_img_dir  # Ensure this is included
         }
 
-        # Filter out None values to avoid overriding defaults in the style_transfer function
-        style_transfer_params = {k: v for k, v in style_transfer_params.items() if v is not None}
+        # Print the parameters, replacing the actual style image with a placeholder
+        style_transfer_params_log = style_transfer_params.copy()
+        style_transfer_params_log['style_img'] = 'Style image ready'
+        print("Style transfer parameters prepared:", style_transfer_params_log)
 
-        # Perform style transfer and get the final image object
-        final_image = style_transfer(
-            content_img_path,
-            style_image_url,
-            **style_transfer_params
-        )
+        img_str = neural_style_transfer(style_transfer_params)
         print("Style transfer completed")
-
-        # Convert the image object to a Base64 string
-        buffered = BytesIO()
-        final_image.save(buffered, format="JPEG")
-        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        print("Image converted to base64")
 
         return {
             "prompt": request.prompt,
@@ -110,7 +130,4 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
 
 @app.get("/ping")
 async def ping():
-    """
-    Health check endpoint to confirm the API is up and running.
-    """
     return {"status": "success", "message": "API is up and running!"}

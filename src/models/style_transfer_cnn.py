@@ -1,168 +1,108 @@
+import models.utils.image_utils as utils
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import models, transforms
-from models.utils.image_utils import load_image
-from PIL import Image
+from torch.optim import Adam, LBFGS
+from torch.autograd import Variable
+import numpy as np
+import os
+import argparse
 
-class ContentLoss(nn.Module):
-    def __init__(self, target):
-        super(ContentLoss, self).__init__()
-        self.target = target.detach()
-        self.loss = nn.MSELoss()
+def build_loss(neural_net, optimizing_img, target_representations, content_feature_maps_index, style_feature_maps_indices, config):
+    target_content_representation = target_representations[0]
+    target_style_representation = target_representations[1]
 
-    def forward(self, input):
-        self.loss_value = self.loss(input, self.target)
-        return input
+    current_set_of_feature_maps = neural_net(optimizing_img)
 
-def gram_matrix(input):
-    a, b, c, d = input.size()
-    features = input.view(a * b, c * d)
-    G = torch.mm(features, features.t())
-    return G.div(a * b * c * d)
+    current_content_representation = current_set_of_feature_maps[content_feature_maps_index].squeeze(axis=0)
+    content_loss = torch.nn.MSELoss(reduction='mean')(target_content_representation, current_content_representation)
 
-class StyleLoss(nn.Module):
-    def __init__(self, target):
-        super(StyleLoss, self).__init__()
-        self.target = gram_matrix(target).detach()
-        self.loss = nn.MSELoss()
+    style_loss = 0.0
+    current_style_representation = [utils.gram_matrix(x) for cnt, x in enumerate(current_set_of_feature_maps) if cnt in style_feature_maps_indices]
+    for gram_gt, gram_hat in zip(target_style_representation, current_style_representation):
+        style_loss += torch.nn.MSELoss(reduction='sum')(gram_gt[0], gram_hat[0])
+    style_loss /= len(target_style_representation)
 
-    def forward(self, input):
-        G = gram_matrix(input)
-        self.loss_value = self.loss(G, self.target)
-        return input
+    tv_loss = utils.total_variation(optimizing_img)
 
-class Normalization(nn.Module):
-    def __init__(self, mean, std):
-        super(Normalization, self).__init__()
-        self.mean = mean.clone().detach().view(-1, 1, 1)
-        self.std = std.clone().detach().view(-1, 1, 1)
+    total_loss = config['content_weight'] * content_loss + config['style_weight'] * style_loss + config['tv_weight'] * tv_loss
 
-    def forward(self, img):
-        return (img - self.mean) / self.std
+    return total_loss, content_loss, style_loss, tv_loss
 
-def get_style_model_and_losses(cnn, normalization_mean, normalization_std, style_img, content_img, content_layers, style_layers):
-    normalization = Normalization(normalization_mean, normalization_std).to(style_img.device)
+def make_tuning_step(neural_net, optimizer, target_representations, content_feature_maps_index, style_feature_maps_indices, config):
+    # Builds function that performs a step in the tuning loop
+    def tuning_step(optimizing_img):
+        total_loss, content_loss, style_loss, tv_loss = build_loss(neural_net, optimizing_img, target_representations, content_feature_maps_index, style_feature_maps_indices, config)
+        # Computes gradients
+        total_loss.backward()
+        # Updates parameters and zeroes gradients
+        optimizer.step()
+        optimizer.zero_grad()
+        return total_loss, content_loss, style_loss, tv_loss
 
-    model = nn.Sequential(normalization)
-    content_losses = []
-    style_losses = []
+    # Returns the function that will be called inside the tuning loop
+    return tuning_step
 
-    i = 0
-    for layer in cnn.children():
-        if isinstance(layer, nn.Conv2d):
-            i += 1
-            name = 'conv_{}'.format(i)
-        elif isinstance(layer, nn.ReLU):
-            name = 'relu_{}'.format(i)
-            layer = nn.ReLU(inplace=False)
-        elif isinstance(layer, nn.MaxPool2d):
-            name = 'pool_{}'.format(i)
-        elif isinstance(layer, nn.BatchNorm2d):
-            name = 'bn_{}'.format(i)
-        else:
-            raise RuntimeError('Unrecognized layer: {}'.format(layer.__class__.__name__))
+def neural_style_transfer(config):
+    content_img_path = os.path.join(config['content_images_dir'], config['content_img_name'])
 
-        model.add_module(name, layer)
+    out_dir_name = 'combined_' + os.path.split(content_img_path)[1].split('.')[0] + '_style_img'
+    dump_path = os.path.join(config['output_img_dir'], out_dir_name)
+    os.makedirs(dump_path, exist_ok=True)
 
-        if name in content_layers:
-            target = model(content_img).detach()
-            content_loss = ContentLoss(target)
-            model.add_module("content_loss_{}".format(i), content_loss)
-            content_losses.append(content_loss)
-
-        if name in style_layers:
-            target_feature = model(style_img).detach()
-            style_loss = StyleLoss(target_feature)
-            model.add_module("style_loss_{}".format(i), style_loss)
-            style_losses.append(style_loss)
-
-    for i in range(len(model) - 1, -1, -1):
-        if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss):
-            break
-
-    model = model[:i+1]
-
-    return model, style_losses, content_losses
-
-def style_transfer(content_img_path, style_img_path, num_steps=200, content_weight=1, style_weight=200000,
-                   content_layers=['conv_4'], style_layers=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5'],
-                   optimizer_type='Adam', learning_rate=0.003, output_path=None):
-    """ Perform style transfer from style_img to content_img, returning the result as a PIL Image. """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Load the content image and get its dimensions
-    content_img = load_image(content_img_path, device)
-    _, _, content_height, content_width = content_img.size()
+    content_img = utils.prepare_img(content_img_path, config['height'], device)
+    style_img = utils.prepare_img(config['style_img'], config['height'], device)
 
-    # Print the dimensions for debugging
-    print(f"Content Image - Width: {content_width}, Height: {content_height}")
-
-    # Load the style image and resize it to match the content image dimensions
-    style_img = load_image(style_img_path, device, size=(content_height, content_width))
-
-    # Print the dimensions for debugging
-    print(f"Style Image - Width: {style_img.size(3)}, Height: {style_img.size(2)}")
-
-    cnn = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features.to(device).eval()
-    cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
-    cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
-
-    model, style_losses, content_losses = get_style_model_and_losses(
-        cnn, cnn_normalization_mean, cnn_normalization_std, style_img, content_img, content_layers, style_layers
-    )
-
-    # Initialize the target image with the content image dimensions
-    input_img = content_img.clone().requires_grad_(True)
-
-    # Select optimizer
-    if optimizer_type == 'LBFGS':
-        optimizer = optim.LBFGS([input_img.requires_grad_()], lr=learning_rate)
-    elif optimizer_type == 'Adam':
-        optimizer = optim.Adam([input_img.requires_grad_()], lr=learning_rate)
+    if config['init_method'] == 'random':
+        gaussian_noise_img = np.random.normal(loc=0, scale=90., size=content_img.shape).astype(np.float32)
+        init_img = torch.from_numpy(gaussian_noise_img).float().to(device)
+    elif config['init_method'] == 'content':
+        init_img = content_img
     else:
-        raise ValueError("Unsupported optimizer type. Use 'LBFGS' or 'Adam'.")
+        style_img_resized = utils.prepare_img(style_img, np.asarray(content_img.shape[2:]), device)
+        init_img = style_img_resized
 
-    run = [0]
-    while run[0] <= num_steps:
-        def closure():
+    optimizing_img = Variable(init_img, requires_grad=True)
+
+    neural_net, content_feature_maps_index_name, style_feature_maps_indices_names = utils.prepare_model(device)
+
+    content_img_set_of_feature_maps = neural_net(content_img)
+    style_img_set_of_feature_maps = neural_net(style_img)
+
+    target_content_representation = content_img_set_of_feature_maps[content_feature_maps_index_name[0]].squeeze(axis=0)
+    target_style_representation = [utils.gram_matrix(x) for cnt, x in enumerate(style_img_set_of_feature_maps) if cnt in style_feature_maps_indices_names[0]]
+    target_representations = [target_content_representation, target_style_representation]
+
+    final_img_base64 = None
+    if config['optimizer'] == 'adam':
+        optimizer = Adam((optimizing_img,), lr=1e1)
+        tuning_step = make_tuning_step(neural_net, optimizer, target_representations, content_feature_maps_index_name[0], style_feature_maps_indices_names[0], config)
+        for cnt in range(config['num_of_iterations']):
+            total_loss, content_loss, style_loss, tv_loss = tuning_step(optimizing_img)
             with torch.no_grad():
-                input_img.clamp_(0, 1)
+                print(f'Adam | iteration: {cnt:03}, total loss={total_loss.item():12.4f}, content_loss={config["content_weight"] * content_loss.item():12.4f}, style loss={config["style_weight"] * style_loss.item():12.4f}, tv loss={config["tv_weight"] * tv_loss.item():12.4f}')
+                img_str = utils.save_optimized_image(optimizing_img, dump_path, config, cnt, config['num_of_iterations'])
+                if img_str:
+                    final_img_base64 = img_str
+    elif config['optimizer'] == 'lbfgs':
+        optimizer = LBFGS((optimizing_img,), max_iter=config['num_of_iterations'], line_search_fn='strong_wolfe')
+        cnt = 0
 
-            optimizer.zero_grad()
-            model(input_img)
-            style_score = 0
-            content_score = 0
-
-            for sl in style_losses:
-                style_score += sl.loss_value
-            for cl in content_losses:
-                content_score += cl.loss_value
-
-            loss = style_weight * style_score + content_weight * content_score
-            if not torch.isnan(loss):
-                loss.backward()
-
-            run[0] += 1
-            if run[0] % 50 == 0:
-                print(f"run {run[0]}:")
-                print(f"Style Loss : {style_score.item():4f} Content Loss: {content_score.item():4f}")
-                print(f"Total Loss: {loss.item():4f}")
-
-            return loss
+        def closure():
+            nonlocal cnt, final_img_base64
+            if torch.is_grad_enabled():
+                optimizer.zero_grad()
+            total_loss, content_loss, style_loss, tv_loss = build_loss(neural_net, optimizing_img, target_representations, content_feature_maps_index_name[0], style_feature_maps_indices_names[0], config)
+            if total_loss.requires_grad:
+                total_loss.backward()
+            with torch.no_grad():
+                print(f'L-BFGS | iteration: {cnt:03}, total loss={total_loss.item():12.4f}, content_loss={config["content_weight"] * content_loss.item():12.4f}, style loss={config["style_weight"] * style_loss.item():12.4f}, tv loss={config["tv_weight"] * tv_loss.item():12.4f}')
+                img_str = utils.save_optimized_image(optimizing_img, dump_path, config, cnt, config['num_of_iterations'])
+                if img_str:
+                    final_img_base64 = img_str
+            cnt += 1
+            return total_loss
 
         optimizer.step(closure)
 
-    with torch.no_grad():
-        input_img.clamp_(0, 1)
-
-    unloader = transforms.ToPILImage()
-    image = input_img.cpu().clone()
-    image = image.squeeze(0)
-    image = unloader(image)
-
-    # Save the image if an output path is provided
-    if output_path:
-        image.save(output_path)
-
-    return image
+    return final_img_base64

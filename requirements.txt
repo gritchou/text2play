@@ -11,3 +11,4 @@ torchvision==0.18.0
 uvicorn
 matplotlib
 google-cloud-error-reporting
+opencv-python
