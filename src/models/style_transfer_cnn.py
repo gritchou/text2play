@@ -43,16 +43,15 @@ def make_tuning_step(neural_net, optimizer, target_representations, content_feat
 
 def neural_style_transfer(config):
     content_img_path = os.path.join(config['content_images_dir'], config['content_img_name'])
-    style_img_path = os.path.join(config['style_images_dir'], config['style_img_name'])
 
-    out_dir_name = 'combined_' + os.path.split(content_img_path)[1].split('.')[0] + '_' + os.path.split(style_img_path)[1].split('.')[0]
+    out_dir_name = 'combined_' + os.path.split(content_img_path)[1].split('.')[0] + '_style_img'
     dump_path = os.path.join(config['output_img_dir'], out_dir_name)
     os.makedirs(dump_path, exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     content_img = utils.prepare_img(content_img_path, config['height'], device)
-    style_img = utils.prepare_img(style_img_path, config['height'], device)
+    style_img = utils.prepare_img(config['style_img'], config['height'], device)
 
     if config['init_method'] == 'random':
         gaussian_noise_img = np.random.normal(loc=0, scale=90., size=content_img.shape).astype(np.float32)
@@ -60,7 +59,7 @@ def neural_style_transfer(config):
     elif config['init_method'] == 'content':
         init_img = content_img
     else:
-        style_img_resized = utils.prepare_img(style_img_path, np.asarray(content_img.shape[2:]), device)
+        style_img_resized = utils.prepare_img(style_img, np.asarray(content_img.shape[2:]), device)
         init_img = style_img_resized
 
     optimizing_img = Variable(init_img, requires_grad=True)

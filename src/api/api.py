@@ -3,11 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
 import os
+import base64
 from typing import Dict, Optional, List
 from google.cloud import error_reporting
 from models.prompt2image import prompt2imageURL
 from models.style_transfer_cnn import neural_style_transfer
 import requests
+import numpy as np
+import cv2 as cv
 
 app = FastAPI()
 
@@ -54,6 +57,10 @@ class StyleTransferRequest(BaseModel):
 
 @app.post("/getImage/")
 async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
+    """
+    Accepts text input, finds a matching image from the dataset based on text similarity,
+    and applies style transfer to generate a stylized image.
+    """
     try:
         print("Received request:", request)
         df = pd.read_csv(DATA_FILE)
@@ -74,18 +81,20 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
 
         if style_image_url.startswith('http://') or style_image_url.startswith('https://'):
             response = requests.get(style_image_url)
-            style_image_path = os.path.join(BASE_DIR, 'data', 'raw', 'images', 'style', 'temp_style.jpg')
-            with open(style_image_path, 'wb') as f:
-                f.write(response.content)
+            img_array = np.frombuffer(response.content, np.uint8)
+            style_img = cv.imdecode(img_array, cv.IMREAD_COLOR)
         else:
-            style_image_path = style_image_url
+            style_img = cv.imread(style_image_url)
 
+        # Ensure the output directory exists
+        output_img_dir = os.path.join(BASE_DIR, 'data', 'processed')
+        os.makedirs(output_img_dir, exist_ok=True)
+
+        # Prepare parameters for the neural_style_transfer function
         style_transfer_params = {
             "content_img_name": os.path.basename(content_img_path),
-            "style_img_name": os.path.basename(style_image_path),
+            "style_img": style_img,  # Pass the style image directly
             "content_images_dir": os.path.dirname(content_img_path),
-            "style_images_dir": os.path.dirname(style_image_path),
-            "output_img_dir": os.path.join(BASE_DIR, 'data', 'processed'),
             "height": height,
             "content_weight": request.content_weight if request.content_weight is not None else 1e5,
             "style_weight": request.style_weight if request.style_weight is not None else 200000,
@@ -95,8 +104,14 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
             "saving_freq": -1,
             "model": 'vgg19',
             "img_format": (4, '.jpg'),
-            "num_of_iterations": 800
+            "num_of_iterations": 800,
+            "output_img_dir": output_img_dir  # Ensure this is included
         }
+
+        # Print the parameters, replacing the actual style image with a placeholder
+        style_transfer_params_log = style_transfer_params.copy()
+        style_transfer_params_log['style_img'] = 'Style image ready'
+        print("Style transfer parameters prepared:", style_transfer_params_log)
 
         img_str = neural_style_transfer(style_transfer_params)
         print("Style transfer completed")
@@ -110,7 +125,7 @@ async def get_image(request: StyleTransferRequest) -> Dict[str, str]:
 
     except Exception as e:
         print(f"Error: {e}")
-        client.report_exception()
+        client.report_exception()  # Report the error to Google Cloud Error Reporting
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/ping")

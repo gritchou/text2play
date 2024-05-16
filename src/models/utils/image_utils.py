@@ -14,7 +14,9 @@ IMAGENET_MEAN_255 = [123.675, 116.28, 103.53]
 IMAGENET_STD_NEUTRAL = [1, 1, 1]
 
 def load_image(img_path, target_shape=None):
-    if img_path.startswith('http://') or img_path.startswith('https://'):
+    if isinstance(img_path, np.ndarray):
+        img = img_path
+    elif img_path.startswith('http://') or img_path.startswith('https://'):
         response = requests.get(img_path)
         img = np.array(Image.open(BytesIO(response.content)).convert('RGB'))
     else:
@@ -56,7 +58,7 @@ def save_image(img, img_path):
     cv.imwrite(img_path, img[:, :, ::-1])  # [:, :, ::-1] converts rgb into bgr (opencv constraint...)
 
 def generate_out_img_name(config):
-    prefix = os.path.basename(config['content_img_name']).split('.')[0] + '_' + os.path.basename(config['style_img_name']).split('.')[0]
+    prefix = os.path.basename(config['content_img_name']).split('.')[0] + '_' + 'style_img'
     # called from the reconstruction script
     if 'reconstruct_script' in config:
         suffix = f'_o_{config["optimizer"]}_h_{str(config["height"])}_m_{config["model"]}{config["img_format"][1]}'
