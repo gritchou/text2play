@@ -27,11 +27,33 @@ Text2Play is an innovative web application that transforms user prompts into a 2
     ```
 3. Install dependencies:
     ```sh
-    pip install -r requirements.txt
+    make install
     ```
-4. Run the application:
+4. Preprocess the dataset:
     ```sh
-    flask run
+    make preprocess-dataset
+    ```
+5. Run the application:
+    ```sh
+    make run
+    ```
+
+## Frontend Setup
+1. Clone the frontend repository:
+    ```sh
+    git clone https://github.com/gritchou/Text2Play-frontend.git
+    ```
+2. Navigate to the frontend project directory:
+    ```sh
+    cd Text2Play-frontend
+    ```
+3. Install frontend dependencies:
+    ```sh
+    yarn install
+    ```
+4. Start the frontend application:
+    ```sh
+    yarn start
     ```
 
 ## Usage
