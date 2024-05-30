@@ -64,8 +64,8 @@ Text2Play is an innovative web application that transforms user prompts into a 2
 
 ## Contributors
 - **Jean-François Grand** - [LinkedIn](https://www.linkedin.com/in/jfgrand) | [GitHub](https://github.com/gritchou)
-- **Guillaume Padan**
-- **Shuja Khan**
+- **Guillaume Padan** - [GitHub](https://github.com/guilPad)
+- **Shuja Khan** - [GitHub](https://github.com/shuja3khan)
 
 ## References
 - [Neural-Style algorithm](https://arxiv.org/abs/1508.06576)
